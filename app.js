@@ -798,7 +798,7 @@ function signInScreen(err) {
       h('span', { class: 'hint' }, 'Kept only in this browser. Never share it; anyone with it can act as you in the copy repo.')),
     h('label', { class: 'lbl', for: 'repo' }, h('span', {}, 'Copy repo'), repo,
       h('span', { class: 'hint' }, 'Leave as it is unless you have been told the repo moved (for example to the company account).')),
-    msg, h('div', { class: 'wrap-row' }, btn, h('a', { href: '?demo=1' }, 'Try the demo (no token needed)')));
+    msg, h('div', { class: 'wrap-row' }, btn, /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? h('a', { href: '?demo=1' }, 'Try the demo (no token needed)') : null));
   return h('div', { class: 'signin' },
     h('div', { class: 'head' }, h('h2', {}, 'Sign in to ' + APP), h('div', { class: 'hint lead' }, 'You sign in with a GitHub token: a password-like key that lets this page read and write the copy repo for you.')),
     h('div', { class: 'card' }, h('h3', {}, 'Make your token (once, about 2 minutes)'),
