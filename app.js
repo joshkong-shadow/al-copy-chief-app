@@ -869,9 +869,55 @@ function outDocs(rel) {
       !/(^|\/)(raw|data|_work|tool-results|assets|moments)\//i.test(p) && !/(^|\/)(PLAN|RESULT|README)\.md$/i.test(p);
   });
   const rank = function (p) { return ['docx', 'pdf', 'html', 'md'].indexOf(p.split('.').pop().toLowerCase()) + 1 || 9; };
+  const latest = latestRound(rel);
+  if (latest) docs.splice(0, docs.length, ...docs.filter(function (p) { return p.indexOf('out/r' + latest + '/') === 0; }));
   const best = {};
   docs.forEach(function (p) { const k = p.replace(/\.[^.]+$/, ''); if (!best[k] || rank(p) < rank(best[k])) best[k] = p; });
   return Object.keys(best).map(function (k) { return best[k]; }).sort();
+}
+/* feedback rounds on a one-shot task land in out/r<K>/ (protocol: CLAUDE.md, Feedback rounds) */
+function latestRound(rel) {
+  let k = 0; rel.forEach(function (p) { const m = /^out\/r(\d+)\//.exec(p); if (m && +m[1] > k) k = +m[1]; }); return k;
+}
+const BULK_FEEDBACK_TYPES = ['dossier', 'playbook'];
+function docLabel(p) { return basename(p).replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '); }
+function downloadCard(t, out) {
+  const round = latestRound(t.rel);
+  return h('div', { class: 'card' },
+    h('div', { class: 'between' }, h('h3', {}, 'Download'), round ? h('span', { class: 'pill orange' }, 'Round ' + round + ' · after your feedback') : null),
+    out.map(function (p) {
+      const word = /\.docx$/i.test(p);
+      return h('div', { class: 'file solid' }, h('span', {}, docLabel(p), ' ', h('span', { class: 'hint' }, '· ' + p.split('.').pop().toUpperCase())),
+        h('button', { class: word ? 'btn' : 'btn2', type: 'button', onclick: function () { downloadRepoFile(t.pre + p); } }, word ? 'Download (Word)' : 'Download', h('span', { class: 'sr-only' }, ' ' + basename(p))));
+    }));
+}
+function bulkFeedbackCard(t) {
+  t.bulk = t.bulk || '';
+  const area = h('textarea', { class: 'in', rows: 6, placeholder: 'All your notes in one go: what to change, add, cut or rethink. Section names or page numbers help.', oninput: function (e) { t.bulk = e.target.value; validate(); } });
+  area.value = t.bulk;
+  const missing = h('div', { class: 'gate slim', hidden: true });
+  const btn = h('button', { class: 'btn', type: 'button' }, 'Send feedback');
+  const edited = function () { return storedPaths(t, 'edited')[0] || ''; };
+  function validate() {
+    const miss = [];
+    if (!t.bulk.trim() && !edited()) miss.push('your feedback or your edited Word file');
+    if (anyUploading(t)) miss.push('wait for the upload to finish');
+    missing.hidden = !miss.length; missing.textContent = 'Missing before you can submit: ' + miss.join(', ') + '.';
+    btn.disabled = !!miss.length;
+  }
+  btn.addEventListener('click', function () {
+    btn.disabled = true; btn.textContent = 'Sending…';
+    const body = buildFeedbackComment({ version: 'latest', proposalsFirst: t.proposals, upload: edited(), general: t.bulk, parts: [] });
+    commandBox(t, 'Feedback', body, function () { t.bulk = ''; t._uploads = {}; })
+      .catch(function (e) { btn.textContent = 'Send feedback'; validate(); toast(errText(e)); });
+  });
+  activeValidate = validate; setTimeout(validate, 0);
+  return h('div', { class: 'card' }, h('h3', {}, 'Feedback'),
+    field('Your feedback on the whole document', area),
+    h('div', { class: 'hint' }, 'Everything you name is addressed; everything else stays as it is. The new version appears above as the next round.'),
+    h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: t.proposals, onchange: function (e) { t.proposals = e.target.checked; } }), 'Show me proposals before changing anything'),
+    uploader(t, 'edited', 'Edited the Word file yourself? Upload it and every edit is kept word for word.', { button: 'Upload edited Word file', accept: '.docx', multiple: false }),
+    missing, h('div', { class: 'wrap-row' }, btn));
 }
 function latestCell(i) {
   const rel = treeJob(i.number);
@@ -887,7 +933,7 @@ function latestCell(i) {
     }
   }
   const out = outDocs(rel);
-  if (out.length === 1) return dlLink(pre + out[0]);
+  if (out.length === 1) return dlLink(pre + out[0], /\.docx$/i.test(out[0]) ? 'Download (Word)' : basename(out[0]));
   if (out.length > 1) return h('a', { href: '#task/' + i.number }, out.length + ' files');
   if (s === 'needs-you' && rel.indexOf('PLAN.md') >= 0) return h('a', { href: '#task/' + i.number }, 'Plan to approve');
   return '—';
@@ -1709,9 +1755,8 @@ function taskView(t) {
     h('div', { class: 'head' }, crumbs, h('h2', {}, taskName(i)), h('div', { class: 'hint lead' }, pill(s, statusText(i)), ' · started by ' + (i.user ? i.user.login : '?') + ' · #' + i.number)),
     statusNote(t),
     s === 'needs-you' ? planCard(t) : null,
-    out.length ? h('div', { class: 'card' }, h('h3', {}, 'What came back'), out.map(function (p) {
-      return h('div', { class: 'file solid' }, h('span', {}, basename(p)), h('button', { class: 'btn2', type: 'button', onclick: function () { downloadRepoFile(t.pre + p); } }, 'Download', h('span', { class: 'sr-only' }, ' ' + basename(p))));
-    })) : null,
+    out.length ? downloadCard(t, out) : null,
+    out.length && (s === 'done' || s === 'ready') && BULK_FEEDBACK_TYPES.indexOf(typeOf(i)) >= 0 ? bulkFeedbackCard(t) : null,
     resultCard(t, s === 'done' || s === 'failed'),
     briefCard(t)
   ];
