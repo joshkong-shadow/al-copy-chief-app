@@ -693,7 +693,7 @@ async function jobFiles(n) {
     for (const it of items) {
       const rel = (dir ? dir + '/' : '') + it.name;
       if (it.type === 'file') out.push(rel);
-      else if (it.type === 'dir' && depth < 2 && /^(v\d+|scripts|docx|html|out|feedback)$/.test(it.name)) await walk(rel, depth + 1);
+      else if (it.type === 'dir' && ((depth < 2 && /^(v\d+|scripts|docx|html|out|feedback)$/.test(it.name)) || (/^out(\/|$)/.test(dir) && depth < 3 && it.name !== 'raw'))) await walk(rel, depth + 1);
     }
   }
   await walk('', 0);
@@ -861,6 +861,18 @@ function latestVersionK(n) {
   const rel = treeJob(n); if (!rel) return 0;
   const vs = versionsFrom(rel); return vs.length ? vs[vs.length - 1].k : 0;
 }
+/* A one-shot task's deliverables: anything under out/ (sub-folders too), minus the raw evidence and
+ * working files; the same document as .docx + .pdf + .md is listed once (Word first). */
+function outDocs(rel) {
+  const docs = rel.filter(function (p) {
+    return /^out\//.test(p) && /\.(docx|pdf|md|html|csv|xlsx)$/i.test(p) &&
+      !/(^|\/)(raw|data|_work|tool-results|assets|moments)\//i.test(p) && !/(^|\/)(PLAN|RESULT|README)\.md$/i.test(p);
+  });
+  const rank = function (p) { return ['docx', 'pdf', 'html', 'md'].indexOf(p.split('.').pop().toLowerCase()) + 1 || 9; };
+  const best = {};
+  docs.forEach(function (p) { const k = p.replace(/\.[^.]+$/, ''); if (!best[k] || rank(p) < rank(best[k])) best[k] = p; });
+  return Object.keys(best).map(function (k) { return best[k]; }).sort();
+}
 function latestCell(i) {
   const rel = treeJob(i.number);
   const s = statusOf(i);
@@ -874,7 +886,7 @@ function latestCell(i) {
       if (rc) return dlLink(pre + rc, 'Review Cut v' + v.k + ' (Word)');
     }
   }
-  const out = rel.filter(function (p) { return /^out\/[^/]+$/.test(p); });
+  const out = outDocs(rel);
   if (out.length === 1) return dlLink(pre + out[0]);
   if (out.length > 1) return h('a', { href: '#task/' + i.number }, out.length + ' files');
   if (s === 'needs-you' && rel.indexOf('PLAN.md') >= 0) return h('a', { href: '#task/' + i.number }, 'Plan to approve');
@@ -1699,7 +1711,7 @@ function taskView(t) {
   const crumbs = h('div', { class: 'crumbs' }, h('a', { href: '#home' }, 'Task overview'), ' / ' + type.name);
   if (typeOf(i) === 'script') return scriptTaskView(t, crumbs);
   const s = statusOf(i);
-  const out = t.rel.filter(function (p) { return /^out\/[^/]+$/.test(p); });
+  const out = outDocs(t.rel);
   return [
     h('div', { class: 'head' }, crumbs, h('h2', {}, taskName(i)), h('div', { class: 'hint lead' }, pill(s, statusText(i)), ' · started by ' + (i.user ? i.user.login : '?') + ' · #' + i.number)),
     statusNote(t),

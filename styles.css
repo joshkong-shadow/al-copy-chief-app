@@ -171,3 +171,7 @@ dialog.modal::backdrop { background: rgba(0,0,0,.6); }
 details.tile > summary { cursor: pointer; list-style: none; }
 details.tile > summary::-webkit-details-marker { display: none; }
 details.tile[open] > summary .hint:last-child { color: var(--accent); }
+
+/* long file names wrap inside their card instead of running past it */
+.hint a, td a { overflow-wrap: anywhere; word-break: break-word; }
+.grid > * , .card { min-width: 0; }
