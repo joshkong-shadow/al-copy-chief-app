@@ -1131,16 +1131,15 @@ function lines(v) { return String(v || '').split('\n').map(function (x) { return
 
 /* ---------- Persona research ---------- */
 SCREENS.persona = function () {
-  const st = form('persona', { deeper: {}, pr: '' });
+  const st = form('persona', { pr: '' });
   const L = { list: 'Personas or angles, one per line' };
   const deeper = ['Sentiments and frustrations', 'Skepticism', 'Where other products fail them', 'At least the top 10 objections'];
   function collect() {
-    const picked = deeper.filter(function (d) { return st.deeper[d]; });
     const missing = [];
     if (!st.product) missing.push('the product');
     if (!lines(st.list).length) missing.push('at least one persona or angle');
     return { missing: missing, short: lines(st.list).join(' · '), files: [],
-      fields: [['Product', st.product], [L.list, st.list], ['Go deeper on', picked.join(' · ')]] };
+      fields: [['Product', st.product], [L.list, st.list], ['Go deeper on (always)', deeper.join(' · ')]] };
   }
   const prods = products();
   if (!st.pr) st.pr = prods[0] || '';
@@ -1151,10 +1150,7 @@ SCREENS.persona = function () {
       field('Product', productSelect(st), { req: true }),
       field(L.list, textarea(st, 'list', { rows: 4 }), { req: true }),
       examples(exField('persona', L.list)),
-      h('div', { class: 'hint' }, 'Go deeper on ', h('span', { class: 'opt' }, '(optional)'), ':'),
-      h('div', { class: 'row2' }, deeper.map(function (d) {
-        return h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!st.deeper[d], onchange: function (e) { st.deeper[d] = e.target.checked; } }), d);
-      })),
+      h('div', { class: 'hint' }, 'Every briefing always goes deeper on: ' + deeper.join(' · ') + '.'),
       h('div', { class: 'hint' }, 'Several personas run one at a time; you’re asked before each next one.'),
       submitBar('persona', collect, { button: 'Start persona research' })),
     h('div', { class: 'card' },
@@ -1167,13 +1163,13 @@ SCREENS.persona = function () {
 
 /* ---------- Shocking angles ---------- */
 SCREENS.angles = function () {
-  const st = form('angles', { from: 'mech', mine: true });
+  const st = form('angles', { from: 'mech' });
   const Q = {
     mech: ['A mechanism or angle', 'Which mechanism or angle are you trying to make shocking?', 'e.g. a body process working against the buyer', 'mechanism'],
     user: ['A type of buyer', 'What type of buyer are you trying to shock into buying?', 'e.g. men on GLP-1 who are losing muscle along with the fat', 'user'],
     ben: ['A benefit', 'Which benefits are you trying to find shocking facts about?', 'e.g. energy, muscle growth, focus', 'benefit']
   };
-  const MINE = 'Also mine our reviews and a rival’s for how buyers describe these problems';
+  const MINE = 'Mine our reviews and a rival’s for how buyers describe these problems';
   const bench = ex('angles').benchmarks || [];
   const q = Q[st.from];
   function collect() {
@@ -1181,7 +1177,7 @@ SCREENS.angles = function () {
     if (!st.product) missing.push('the product');
     if (!(st['q_' + st.from] || '').trim()) missing.push('what you are starting from');
     return { missing: missing, short: st['q_' + st.from], files: [],
-      fields: [['Product', st.product], ['What are you starting from?', q[0]], [q[1], st['q_' + st.from]], ['The bar to beat', bench.join(' · ')], ['Other angles you liked', st.liked], [MINE, st.mine ? 'yes' : 'no']] };
+      fields: [['Product', st.product], ['What are you starting from?', q[0]], [q[1], st['q_' + st.from]], ['The bar to beat', bench.join(' · ')], ['Other angles you liked', st.liked], [MINE, 'yes (always)']] };
   }
   return [
     header('Shocking angles', 'Turns a mechanism, a buyer or a benefit into scary, number-led ad angles. You pick the best; they become fact-checked hook cards ready for Write a script.'),
@@ -1194,7 +1190,7 @@ SCREENS.angles = function () {
       h('div', { class: 'tile' }, h('h4', {}, 'The bar to beat'),
         h('div', { class: 'hint' }, 'Every new angle is held to our best: ', bench.length ? bench.map(function (b, i) { return [i ? ' · ' : '', h('b', { class: 'b' }, b)]; }) : '(not loaded)', '.'),
         field('Other angles you liked', input(st, 'liked', { placeholder: 'e.g. an earlier angle that worked' }), { opt: '(optional)' })),
-      checkbox(st, 'mine', MINE),
+      h('div', { class: 'hint' }, 'Always included: our reviews and a rival’s are mined for how buyers describe these problems.'),
       uploader(st, 'ctx', ['Add context ', h('span', { class: 'opt' }, '(optional)'), ': notes, a brief, screenshots']),
       h('div', { class: 'gate' }, 'You’ll get 12–20 candidates, each with its number, what it lands on (sex · looking like a man · drive/money · death) and its strength. You pick (e.g. "I like 1, 3, 6"); only those become hook cards.'),
       submitBar('angles', collect, { button: 'Find angles', timing: 'About 20–30 minutes. Track it in Task overview.' }))
@@ -1230,32 +1226,36 @@ SCREENS.deep = function () {
 
 /* ---------- Write a script ---------- */
 SCREENS.script = function () {
-  const st = form('script', { hasAngle: 'yes', angles: [''], count: '1', countTouched: false, engine: 'propose', who: 'creator', cast: 'pick', research: [], openEng: '', openEx: '', deep: false });
+  const st = form('script', { hasAngle: 'yes', angle: '', count: '1', engine: 'propose', who: 'creator', cast: 'pick', research: [], openEng: '', openEx: '', deep: false });
   const A = 'Your angle OR hook, in one line';
   const N = 'Your narrative or sales argument';
   const PROPOSE = 'Let ' + APP + ' propose';
   const pk = productKey(st.product || products()[0]);
   const engines = (S.data.engines || []).filter(function (e) { return !e.products || e.products.indexOf(pk) >= 0; });
   const cast = ((ex('script').cast || {})[pk]) || [];
-  const castOpts = [['pick', 'Let ' + APP + ' pick from the winner’s cast']].concat(cast.map(function (c) { return [c, c]; })).concat([['new', 'Someone new (describe below)']]);
+  const castOpts = [['pick', 'Let ' + APP + ' pick from the winner’s cast']].concat(cast.map(function (c) { return [c, c]; })).concat([['new', 'Someone new (add their Instagram below)']]);
   if (castOpts.map(function (o) { return o[0]; }).indexOf(st.cast) < 0) st.cast = 'pick';
   if (st.engine !== 'propose' && !engines.some(function (e) { return e.name === st.engine; })) st.engine = 'propose';
 
   function collect() {
-    const angles = st.angles.map(function (a) { return (a || '').trim(); }).filter(Boolean);
+    if (st.angle === undefined && Array.isArray(st.angles)) st.angle = st.angles[0] || '';  // saved drafts from the old form
+    const angle = (st.angle || '').trim();
     const missing = [];
     if (!st.product) missing.push('the product');
-    if (!angles.length) missing.push('your angle or hook');
+    if (!angle) missing.push('your angle or hook');
     let who = '';
     if (st.who === 'ai') who = 'AI Voiceover';
-    else if (st.who === 'inf') who = 'Influencer';
-    else who = 'Creator — ' + (st.cast === 'pick' ? castOpts[0][1] : st.cast === 'new' ? 'Someone new' : st.cast);
+    else if (st.who === 'creator') { who = 'Creator'; if (!(st.creatorDesc || '').trim()) missing.push('a description of the creator'); }
+    else {
+      who = 'Influencer — ' + (st.cast === 'pick' ? castOpts[0][1] : st.cast === 'new' ? 'Someone new' : st.cast);
+      if (st.cast === 'new' && !(st.infLink || '').trim()) missing.push('the new influencer’s Instagram link');
+    }
     const model = [st.modelLink].concat(storedPaths(st, 'model')).filter(function (x) { return x && String(x).trim(); }).join('\n');
-    return { missing: missing, short: angles[0], files: st.research.slice(),
-      fields: [['Product', st.product], ['How many scripts', st.count], [A, angles.join('\n')], [N, st.narrative],
+    return { missing: missing, short: angle, files: st.research.slice(),
+      fields: [['Product', st.product], ['How many scripts', st.count], [A, angle], [N, st.narrative],
         ['Engine', st.engine === 'propose' ? PROPOSE : st.engine], ['A script to model on', model], ['Who says it', who],
-        ['Tone of voice', st.who === 'ai' ? st.tone : ''], ['Describe the creator', st.who === 'creator' && st.cast === 'new' ? st.creatorDesc : ''],
-        ['Influencer links', st.who === 'inf' ? st.inf : ''], ['Do proper research into each angle first', st.deep ? 'yes' : 'no']] };
+        ['Tone of voice', st.who === 'ai' ? st.tone : ''], ['Describe the creator', st.who === 'creator' ? st.creatorDesc : ''],
+        ['New influencer’s Instagram (look them up and study how they talk)', st.who === 'inf' && st.cast === 'new' ? st.infLink : ''], ['Do proper research into each angle first', st.deep ? 'yes' : 'no']] };
   }
 
   const gateCard = h('div', { class: 'card' }, h('h3', {}, 'Do you have an angle yet?'),
@@ -1267,16 +1267,11 @@ SCREENS.script = function () {
   const out = [header('Write a script', 'Video scripts built on our proven winners. Each script comes back as one Review Cut (Word): five hooks A–E and the full script.'), gateCard];
   if (st.hasAngle !== 'yes') { activeValidate = null; return out; }
 
-  const countIn = input(st, 'count', { onchange: function () { st.countTouched = true; } });
-  const angleInputs = st.angles.map(function (a, i) {
-    const el = h('input', { class: 'in', value: a, placeholder: 'One line: the scary, specific idea, or the hook you want to open with', oninput: function (e) { st.angles[i] = e.target.value; revalidate(); } });
-    return i === 0 ? field(A, el, { req: true }) : h('div', { class: 'wrap-row' }, h('div', { style: 'flex:1;min-width:200px' }, field('Angle ' + (i + 1), el)),
-      h('button', { class: 'btn2 sm', type: 'button', onclick: function () { st.angles.splice(i, 1); if (!st.countTouched) st.count = String(st.angles.length); render(); } }, 'Remove', h('span', { class: 'sr-only' }, ' angle ' + (i + 1))));
-  });
+  if (st.angle === undefined && Array.isArray(st.angles)) st.angle = st.angles[0] || '';
+  const angleIn = h('input', { class: 'in', value: st.angle || '', placeholder: 'One line: the scary, specific idea, or the hook you want to open with', oninput: function (e) { st.angle = e.target.value; revalidate(); } });
   out.push(h('div', { class: 'card' },
-    h('div', { class: 'row2' }, field('Product', productSelect(st), { req: true }), field('How many scripts', countIn, { opt: '(one per angle)' })),
-    angleInputs, examples(exField('script', A)),
-    h('button', { class: 'btn2', type: 'button', style: 'align-self:flex-start', onclick: function () { st.angles.push(''); if (!st.countTouched) st.count = String(st.angles.length); render(); } }, '+ Add another angle'),
+    h('div', { class: 'row2' }, field('Product', productSelect(st), { req: true }), field('How many scripts', input(st, 'count'), { opt: '(all on this one angle)' })),
+    field(A, angleIn, { req: true, hint: 'One angle per script. For another angle, start a new task.' }), examples(exField('script', A)),
     field(N, textarea(st, 'narrative', { rows: 4, placeholder: 'Problem → why it happens → what the product does → proof' }), { opt: '(optional, bullets are fine)' }),
     examples(exField('script', N))));
 
@@ -1311,11 +1306,11 @@ SCREENS.script = function () {
   const whoCard = h('div', { class: 'card' }, h('h3', {}, 'Who says it'),
     chips(st, 'who', [['ai', 'AI Voiceover'], ['creator', 'Creator'], ['inf', 'Influencer']], 'Who says it'));
   if (st.who === 'ai') whoCard.appendChild(field('Tone of voice', input(st, 'tone', { placeholder: 'e.g. calm, doctor-like narrator; urgent and alarming' })));
-  if (st.who === 'creator') {
-    whoCard.appendChild(field('Who the creator is', select(st, 'cast', castOpts, { rerender: true })));
-    whoCard.appendChild(field('Describe the creator', input(st, 'creatorDesc', { placeholder: 'e.g. Personal trainer who has trained 2,000+ clients; big, friendly, no-nonsense' }), { opt: '(for someone new)' }));
+  if (st.who === 'creator') whoCard.appendChild(field('Describe the creator', input(st, 'creatorDesc', { placeholder: 'e.g. Personal trainer who has trained 2,000+ clients; big, friendly, no-nonsense' }), { req: true }));
+  if (st.who === 'inf') {
+    whoCard.appendChild(field('Which influencer', select(st, 'cast', castOpts, { rerender: true })));
+    if (st.cast === 'new') whoCard.appendChild(field('Their Instagram link', input(st, 'infLink', { placeholder: 'https://www.instagram.com/…' }), { req: true, hint: APP + ' looks them up, studies how they talk and tailors the script to them.' }));
   }
-  if (st.who === 'inf') whoCard.appendChild(field('Influencer links', input(st, 'inf', { placeholder: 'Instagram / TikTok / YouTube links' }), { hint: APP + ' studies how they talk and tailors the script to their persona.' }));
   out.push(whoCard);
 
   out.push(h('div', { class: 'card' }, h('h3', {}, 'Research and context'),
@@ -1338,15 +1333,13 @@ SCREENS.iteration = function () {
   function collect() {
     const n = lines(st.links).length;
     return { missing: n ? [] : ['at least one ad link'], short: n + (n === 1 ? ' ad' : ' ads'), files: [],
-      fields: [[L, st.links], ['Ads Manager screenshot', storedPaths(st, 'shot').join('\n')]] };
+      fields: [[L, st.links]] };
   }
   return [
     header('Script iteration analysis', 'For ads that showed promise but didn’t win. You get, per ad, a short performance summary against the account average and an edit brief: what to keep, what’s leaking, what to change. Edit it, then hand it to the video editors.'),
     h('div', { class: 'card' },
       field(L, textarea(st, 'links', { rows: 4, placeholder: sample }), { req: true,
         hint: ['Use the ad’s "Facebook Post with Comments" link: it looks like ', h('code', {}, 'facebook.com/<page id>/posts/<post id>/?dco_ad_id=<ad id>'), '. The full ad name works too.'] }),
-      h('div', { class: 'lbl' }, h('span', {}, 'Ads Manager screenshot ', h('span', { class: 'opt' }, '(optional; only if you want your own numbers used)')),
-        uploader(st, 'shot', 'Drop a screenshot of the stats', { accept: 'image/*,.pdf' })),
       h('div', { class: 'hint' }, 'Stats come from Meta and Moby (read-only) and are compared with the account averages already stored in the skill. Comes back as one Word doc per ad: full ad name · stats with the average in grey · KEEP / LEAK / EDIT · word-for-word transcript with timestamps. Two or more ads also get one summary scoreboard.'),
       submitBar('iteration', collect, { button: 'Analyse ads', timing: 'About 10–20 minutes per ad.' }))
   ];
